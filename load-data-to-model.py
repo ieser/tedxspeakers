@@ -1,5 +1,5 @@
-###### TEDx-Load-Aggregate-Model
-######
+# TEDxSpeakers
+# Script ETL a partire dai file csv caricati su S3.
 
 import sys
 import json
@@ -14,22 +14,16 @@ from awsglue.job import Job
 
 
 
+tedx_list_dataset_path = "s3://ieser-mytedx-data/final_list.csv"    # file su S3 con la lista dei video di Tedx
+tedx_tags_dataset_path = "s3://ieser-mytedx-data/tags.csv"          # file su S3 con i tag dei video
+tedx_details_dataset_path = "s3://ieser-mytedx-data/details.csv"    # file su S3 con i dettagli dei video
+tedx_images_dataset_path = "s3://ieser-mytedx-data/images.csv"    # file su S3 con le immagini dei video
+tedx_watchnext_dataset_path = "s3://ieser-mytedx-data/related_videos.csv"  # file su S3 con i video correlati
 
-##### FROM FILES
-tedx_dataset_path = "s3://tedx-2024-data/final_list.csv"
-
-###### READ PARAMETERS
 args = getResolvedOptions(sys.argv, ['JOB_NAME'])
-
-##### START JOB CONTEXT AND JOB
 sc = SparkContext()
-
-
 glueContext = GlueContext(sc)
 spark = glueContext.spark_session
-
-
-    
 job = Job(glueContext)
 job.init(args['JOB_NAME'], args)
 
@@ -39,25 +33,24 @@ tedx_dataset = spark.read \
     .option("header","true") \
     .option("quote", "\"") \
     .option("escape", "\"") \
-    .csv(tedx_dataset_path)
+    .csv(tedx_list_dataset_path)
     
 tedx_dataset.printSchema()
 
-
-#### FILTER ITEMS WITH NULL POSTING KEY
+# Conto gli elementi
 count_items = tedx_dataset.count()
-count_items_null = tedx_dataset.filter("id is not null").count()
-
 print(f"Number of items from RAW DATA {count_items}")
+
+# Conto gli elementi con id non nullo
+count_items_null = tedx_dataset.filter("id is not null").count()  
 print(f"Number of items from RAW DATA with NOT NULL KEY {count_items_null}")
 
 ## READ THE DETAILS
-details_dataset_path = "s3://tedx-2024-data/details.csv"
 details_dataset = spark.read \
     .option("header","true") \
     .option("quote", "\"") \
     .option("escape", "\"") \
-    .csv(details_dataset_path)
+    .csv(tedx_details_dataset_path)
 
 details_dataset = details_dataset.select(col("id").alias("id_ref"),
                                          col("description"),
@@ -68,31 +61,50 @@ details_dataset = details_dataset.select(col("id").alias("id_ref"),
 tedx_dataset_main = tedx_dataset.join(details_dataset, tedx_dataset.id == details_dataset.id_ref, "left") \
     .drop("id_ref")
 
-tedx_dataset_main.printSchema()
 
-## READ TAGS DATASET
-tags_dataset_path = "s3://tedx-2024-data/tags.csv"
-tags_dataset = spark.read.option("header","true").csv(tags_dataset_path)
+### VIDEO IMAGES 
+# Recupera dal dataset il percorso delle immagini
+image_dataset = spark.read \
+    .option("header","true") \
+    .csv(tedx_images_dataset_path)
 
+image_dataset = image_dataset.select( col("id").alias("id_ref"),  col("url").alias("url_image"))
+tedx_dataset_main = tedx_dataset_main.join(image_dataset, tedx_dataset_main.id == image_dataset.id_ref, "left") \
+    .drop("id_ref")
+    
 
-# CREATE THE AGGREGATE MODEL, ADD TAGS TO TEDX_DATASET
+### ADD TAGS DATASET
+tags_dataset = spark.read.option("header","true").csv(tedx_tags_dataset_path)
 tags_dataset_agg = tags_dataset.groupBy(col("id").alias("id_ref")).agg(collect_list("tag").alias("tags"))
 tags_dataset_agg.printSchema()
-tedx_dataset_agg = tedx_dataset_main.join(tags_dataset_agg, tedx_dataset.id == tags_dataset_agg.id_ref, "left") \
+tedx_dataset_main = tedx_dataset_main.join(tags_dataset_agg, tedx_dataset_main.id == tags_dataset_agg.id_ref, "left") \
+    .drop("id_ref") \
+    .select(col("id").alias("_id"), col("*")) \
+
+tedx_dataset_main.printSchema()
+
+
+
+
+### ADD WATCH NEXT
+tedx_watchnext_dataset_path = "s3://ieser-mytedx-data/related_videos.csv"  # file su S3 con i video correlati
+watchNext_dataset = spark.read.option("header","true").csv(tedx_watchnext_dataset_path)
+watchNext_dataset = watchNext_dataset.groupBy(col("id").alias("id_ref")).agg(collect_list("related_id").alias("watch_next_ids"))
+watchNext_dataset.printSchema()
+tedx_dataset_main = tedx_dataset_main.join(watchNext_dataset, tedx_dataset_main.id == watchNext_dataset.id_ref, "left") \
     .drop("id_ref") \
     .select(col("id").alias("_id"), col("*")) \
     .drop("id") \
 
-tedx_dataset_agg.printSchema()
 
 
 write_mongo_options = {
-    "connectionName": "TEDX",
-    "database": "unibg_tedx_2024",
+    "connectionName": "MongoDB Atlas connection",
+    "database": "tedxspeakers",
     "collection": "tedx_data",
     "ssl": "true",
     "ssl.domain_match": "false"}
 from awsglue.dynamicframe import DynamicFrame
-tedx_dataset_dynamic_frame = DynamicFrame.fromDF(tedx_dataset_agg, glueContext, "nested")
+tedx_dataset_dynamic_frame = DynamicFrame.fromDF(tedx_dataset_main, glueContext, "nested")
 
 glueContext.write_dynamic_frame.from_options(tedx_dataset_dynamic_frame, connection_type="mongodb", connection_options=write_mongo_options)
