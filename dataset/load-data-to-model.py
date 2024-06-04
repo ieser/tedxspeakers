@@ -95,7 +95,7 @@ tedx_dataset_main = tedx_dataset_main.join(watchNext_dataset_toJoin, tedx_datase
 
 
 write_mongo_options = {
-    "connectionName": "MongoDB Atlas connection",
+    "connectionName": "TedXSpeakersDB",
     "database": "tedxspeakers",
     "collection": "tedx_data",
     "ssl": "true",
