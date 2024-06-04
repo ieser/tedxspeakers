@@ -52,7 +52,7 @@ details_dataset = spark.read \
     .option("escape", "\"") \
     .csv(tedx_details_dataset_path)
 
-details_dataset = details_dataset.select(col("id"),col("slug").alias("slug_ref"),
+details_dataset = details_dataset.select(col("slug").alias("slug_ref"),
                                          col("description"),
                                          col("duration"),
                                          col("presenterDisplayName"),
@@ -80,10 +80,10 @@ tedx_dataset_main = tedx_dataset_main.join(tags_dataset_agg, tedx_dataset_main.s
 tedx_watchnext_dataset_path = "s3://ieser-tedxspeakers-data/related_videos.csv" 
 watchNext_dataset = spark.read.option("header","true").csv(tedx_watchnext_dataset_path)
 
-columns_to_include = watchNext_dataset.columns[1:]
-watchNext_dataset_toJoin = watchNext_dataset.groupBy(col("id").alias("id_ref")).agg(collect_list(struct(*columns_to_include)).alias("related_videos_info"))
+columns_to_include = watchNext_dataset.columns[3:]
+watchNext_dataset_toJoin = watchNext_dataset.groupBy(col("id").alias("id_ref")).agg(collect_list(struct(*columns_to_include)).alias("related"))
+watchNext_dataset_toJoin.printSchema()
 tedx_dataset_main = tedx_dataset_main.join(watchNext_dataset_toJoin, tedx_dataset_main.id == watchNext_dataset_toJoin.id_ref).drop("id_ref") 
-    
     
 tedx_dataset_main = tedx_dataset_main.withColumn("_id", tedx_dataset_main["slug"])   
 
