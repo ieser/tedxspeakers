@@ -89,12 +89,8 @@ tedx_dataset_main.printSchema()
 ### ADD WATCH NEXT
 tedx_watchnext_dataset_path = "s3://ieser-mytedx-data/related_videos.csv"  # file su S3 con i video correlati
 watchNext_dataset = spark.read.option("header","true").csv(tedx_watchnext_dataset_path)
-watchNext_dataset = watchNext_dataset.groupBy(col("id").alias("id_ref")).agg(collect_list("related_id").alias("watch_next_ids"))
-watchNext_dataset.printSchema()
-tedx_dataset_main = tedx_dataset_main.join(watchNext_dataset, tedx_dataset_main.id == watchNext_dataset.id_ref, "left") \
-    .drop("id_ref") \
-    .select(col("id").alias("_id"), col("*")) \
-    .drop("id") \
+watchNext_dataset_toJoin = watchNext_dataset.groupBy(col("id").alias("id_ref")).agg(collect_list(struct(watchNext_dataset[1:]).alias("watch_next_videos"))
+tedx_dataset_main = tedx_dataset_main.join(watchNext_dataset_toJoin, tedx_dataset_main.id == watchNext_dataset_toJoin.id_ref, "left").drop("id_ref") 
 
 
 
