@@ -4,7 +4,7 @@
 import sys
 import json
 import pyspark
-from pyspark.sql.functions import col, collect_list, array_join
+from pyspark.sql.functions import col, collect_list, array_join, struct
 
 from awsglue.transforms import *
 from awsglue.utils import getResolvedOptions
@@ -52,47 +52,40 @@ details_dataset = spark.read \
     .option("escape", "\"") \
     .csv(tedx_details_dataset_path)
 
-details_dataset = details_dataset.select(col("id").alias("id_ref"),
+details_dataset = details_dataset.select(col("id"),col("slug").alias("slug_ref"),
                                          col("description"),
                                          col("duration"),
+                                         col("presenterDisplayName"),
                                          col("publishedAt"))
 
 # AND JOIN WITH THE MAIN TABLE
-tedx_dataset_main = tedx_dataset.join(details_dataset, tedx_dataset.id == details_dataset.id_ref, "left") \
-    .drop("id_ref")
+tedx_dataset_main = tedx_dataset.join(details_dataset, tedx_dataset.slug == details_dataset.slug_ref, "left").drop("slug_ref")
 
 
 ### VIDEO IMAGES 
 # Recupera dal dataset il percorso delle immagini
-image_dataset = spark.read \
-    .option("header","true") \
-    .csv(tedx_images_dataset_path)
+image_dataset = spark.read.option("header","true").csv(tedx_images_dataset_path)
 
-image_dataset = image_dataset.select( col("id").alias("id_ref"),  col("url").alias("url_image"))
-tedx_dataset_main = tedx_dataset_main.join(image_dataset, tedx_dataset_main.id == image_dataset.id_ref, "left") \
-    .drop("id_ref")
+image_dataset = image_dataset.select( col("slug").alias("slug_ref"),  col("url").alias("url_image"))
+tedx_dataset_main = tedx_dataset_main.join(image_dataset, tedx_dataset_main.slug == image_dataset.slug_ref, "left").drop("slug_ref")
     
 
 ### ADD TAGS DATASET
 tags_dataset = spark.read.option("header","true").csv(tedx_tags_dataset_path)
-tags_dataset_agg = tags_dataset.groupBy(col("id").alias("id_ref")).agg(collect_list("tag").alias("tags"))
-tags_dataset_agg.printSchema()
-tedx_dataset_main = tedx_dataset_main.join(tags_dataset_agg, tedx_dataset_main.id == tags_dataset_agg.id_ref, "left") \
-    .drop("id_ref") \
-    .select(col("id").alias("_id"), col("*")) \
-
-tedx_dataset_main.printSchema()
-
-
+tags_dataset_agg = tags_dataset.groupBy(col("slug").alias("slug_ref")).agg(collect_list("tag").alias("tags"))
+tedx_dataset_main = tedx_dataset_main.join(tags_dataset_agg, tedx_dataset_main.slug == tags_dataset_agg.slug_ref, "left").drop("slug_ref") 
 
 
 ### ADD WATCH NEXT
-tedx_watchnext_dataset_path = "s3://ieser-mytedx-data/related_videos.csv"  # file su S3 con i video correlati
+tedx_watchnext_dataset_path = "s3://ieser-tedxspeakers-data/related_videos.csv" 
 watchNext_dataset = spark.read.option("header","true").csv(tedx_watchnext_dataset_path)
-watchNext_dataset_toJoin = watchNext_dataset.groupBy(col("id").alias("id_ref")).agg(collect_list(struct(watchNext_dataset[1:]).alias("watch_next_videos"))
-tedx_dataset_main = tedx_dataset_main.join(watchNext_dataset_toJoin, tedx_dataset_main.id == watchNext_dataset_toJoin.id_ref, "left").drop("id_ref") 
 
-
+columns_to_include = watchNext_dataset.columns[1:]
+watchNext_dataset_toJoin = watchNext_dataset.groupBy(col("id").alias("id_ref")).agg(collect_list(struct(*columns_to_include)).alias("related_videos_info"))
+tedx_dataset_main = tedx_dataset_main.join(watchNext_dataset_toJoin, tedx_dataset_main.id == watchNext_dataset_toJoin.id_ref).drop("id_ref") 
+    
+    
+tedx_dataset_main = tedx_dataset_main.withColumn("_id", tedx_dataset_main["slug"])   
 
 write_mongo_options = {
     "connectionName": "TedXSpeakersDB",
