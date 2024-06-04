@@ -14,11 +14,11 @@ from awsglue.job import Job
 
 
 
-tedx_list_dataset_path = "s3://ieser-mytedx-data/final_list.csv"    # file su S3 con la lista dei video di Tedx
-tedx_tags_dataset_path = "s3://ieser-mytedx-data/tags.csv"          # file su S3 con i tag dei video
-tedx_details_dataset_path = "s3://ieser-mytedx-data/details.csv"    # file su S3 con i dettagli dei video
-tedx_images_dataset_path = "s3://ieser-mytedx-data/images.csv"    # file su S3 con le immagini dei video
-tedx_watchnext_dataset_path = "s3://ieser-mytedx-data/related_videos.csv"  # file su S3 con i video correlati
+tedx_list_dataset_path = "s3://ieser-tedxspeakers-data/final_list.csv"    # file su S3 con la lista dei video di Tedx
+tedx_tags_dataset_path = "s3://ieser-tedxspeakers-data/tags.csv"          # file su S3 con i tag dei video
+tedx_details_dataset_path = "s3://ieser-tedxspeakers-data/details.csv"    # file su S3 con i dettagli dei video
+tedx_images_dataset_path = "s3://ieser-tedxspeakers-data/images.csv"    # file su S3 con le immagini dei video
+tedx_watchnext_dataset_path = "s3://ieser-tedxspeakers-data/related_videos.csv"  # file su S3 con i video correlati
 
 args = getResolvedOptions(sys.argv, ['JOB_NAME'])
 sc = SparkContext()
