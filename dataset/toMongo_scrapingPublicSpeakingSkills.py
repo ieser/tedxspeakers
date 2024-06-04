@@ -1,23 +1,45 @@
-import requests
+from awsglue.transforms import *
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from pyspark.sql import SparkSession
 from bs4 import BeautifulSoup
+import requests
 
-# URL del libro
-base_url = "https://pressbooks.bccampus.ca/speaking/"
+# Inizializzazione dei contesti di Spark e Glue
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
 
-# Invia una richiesta alla pagina principale del libro
-response = requests.get(base_url)
-soup = BeautifulSoup(response.content, 'html.parser')
+# URL del sito web da cui recuperare i dati
+url = "https://pressbooks.bccampus.ca/speaking/"
 
-# Trova il contenitore dei capitoli
-chapters_container = soup.find('nav', {'id': 'table-of-contents'})
+# Leggi i dati HTML dal sito web
+html_content = requests.get(url).content
 
-# Estrai i titoli dei capitoli e i rispettivi link
+# Parsing del contenuto HTML con BeautifulSoup
+soup = BeautifulSoup(html_content, 'html.parser')
+
+# Estrarre i titoli, i link e il contenuto dei capitoli
 chapters = []
-for chapter in chapters_container.find_all('li', class_='chapter'):
-    chapter_title = chapter.find('a').get_text(strip=True)
-    chapter_link = chapter.find('a')['href']
-    chapters.append((chapter_title, chapter_link))
+for idx, chapter in enumerate(soup.find_all('div', class_='book-chapter'), start=1):
+    title = chapter.find('h3', class_='toc-level-1').find('a').get_text(strip=True)
+    link = chapter.find('h3', class_='toc-level-1').find('a')['href']
+    content = '\n'.join(chapter.find('div', class_='chapter-content').stripped_strings)
+    chapters.append((idx, title, link, content))
 
-# Stampa i capitoli
-for title, link in chapters:
-    print(f"Title: {title}, Link: {link}")
+# Converte i dati estratti in un DataFrame Glue
+transformed_df = spark.createDataFrame(chapters, ["Chapter Number", "Title", "Link", "Content"])
+
+
+write_mongo_options = {
+    "connectionName": "TedXSpeakersDB",
+    "database": "tedxspeakers",
+    "collection": "speakingskills",
+    "ssl": "true",
+    "ssl.domain_match": "false"}
+from awsglue.dynamicframe import DynamicFrame
+transformed_df_dynamic_frame = DynamicFrame.fromDF(transformed_df, glueContext, "nested")
+
+
+glueContext.write_dynamic_frame.from_options(transformed_df_dynamic_frame, connection_type="mongodb", connection_options=write_mongo_options)
