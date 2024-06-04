@@ -96,4 +96,5 @@ write_mongo_options = {
 from awsglue.dynamicframe import DynamicFrame
 tedx_dataset_dynamic_frame = DynamicFrame.fromDF(tedx_dataset_main, glueContext, "nested")
 
+
 glueContext.write_dynamic_frame.from_options(tedx_dataset_dynamic_frame, connection_type="mongodb", connection_options=write_mongo_options)
