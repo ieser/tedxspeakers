@@ -20,7 +20,7 @@ module.exports.get_all_lessons = (event, context, callback) => {
     }
     
     const sort = { _id: 1 }
-    const fields = { content: 0 }
+    const fields = { content: 0, link:0 }
 
     connect_to_db().then(() => {
         lesson.find({},fields)
