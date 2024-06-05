@@ -1,11 +1,10 @@
-
 const mongoose = require('mongoose');
 
 const lesson_schema = new mongoose.Schema({
-    id: Number,
+    _id: Number,
     title: String,
     link: String,
     content: String
-}, { collection: 'tedx_data' });
+}, { collection: 'speakingskills' });
 
 module.exports = mongoose.model('lesson', lesson_schema);
