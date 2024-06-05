@@ -14,22 +14,28 @@ spark = glueContext.spark_session
 # URL del sito web da cui recuperare i dati
 url = "https://pressbooks.bccampus.ca/speaking/"
 
-# Leggi i dati HTML dal sito web
 html_content = requests.get(url).content
-
-# Parsing del contenuto HTML con BeautifulSoup
-soup = BeautifulSoup(html_content, 'html.parser')
-
-# Estrarre i titoli, i link e il contenuto dei capitoli
+soupBook = BeautifulSoup(html_content, 'html.parser') #Recupero il contenuto della pagina web
+ 
 chapters = []
-for idx, chapter in enumerate(soup.find_all('div', class_='book-chapter'), start=1):
-    title = chapter.find('h3', class_='toc-level-1').find('a').get_text(strip=True)
-    link = chapter.find('h3', class_='toc-level-1').find('a')['href']
-    content = '\n'.join(chapter.find('div', class_='chapter-content').stripped_strings)
-    chapters.append((idx, title, link, content))
+for idx, chapter in enumerate(soupBook.find_all('li', class_='toc__chapter'), start=1):
+    title = link = content = ""
+    
+    title = chapter.find('a').get_text(strip=True).split(": ")
 
-# Converte i dati estratti in un DataFrame Glue
-transformed_df = spark.createDataFrame(chapters, ["Chapter Number", "Title", "Link", "Content"])
+    title =  title[1] if len(title) == 2 else "Not found"
+    print("titolo" + title)
+    link = chapter.find('a')['href']
+    print("link" + link)
+    
+    if(link != ""):
+        html_content = requests.get(link).content
+        soupCapther = BeautifulSoup(html_content, 'html.parser') #Recupero il contenuto del singolo capitolo
+        content = soupCapther.find('div', class_='site-content').get_text(strip=True)
+    chapters.append((idx, title, link, content))
+    
+print(chapters)
+transformed_df = spark.createDataFrame(chapters, ["_id", "Title", "Link", "Content"])
 
 
 write_mongo_options = {
