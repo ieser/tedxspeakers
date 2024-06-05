@@ -18,8 +18,6 @@ module.exports.get_watch_next = (event, context, callback) => {
             body: 'Could not fetch the talks. Slug is null.'
         })
     }
-
-    
     connect_to_db().then(() => {
         talk.find({"slug": body.slug})
             .then(talks => {
